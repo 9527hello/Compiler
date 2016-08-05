@@ -1,0 +1,197 @@
+/*@A (C) 2016 Gachiman                                                       */
+
+
+  @
+  @	This file contains the lex state-machine driver. It's
+  @	path should be put into the LIB environment.
+  @----------------------------------------------------------------------
+  @ This part goes at the top of the file, before any tables are
+  @ printed but after the user-supplied header is printed.
+  @----------------------------------------------------------------------
+  
+public class Lexyy {
+	private int yyState = -1;
+	private	int yyMoreFlag;	/* Set when YyMore() is executed       	*/
+	private SourceFileInput sourceInput;
+	private YyDebug yyDebug;
+	private HashMap<String, Integer> keyWord;
+	private boolean legalChar;
+
+/* yyNxt[] is used for the DFA transition table: declared below.-1 marks failure
+ * transitions in the DFA transition table. These transitions must be handled by 
+ * the driver program. The DFA start state is State 0.
+ */
+
+
+  @----------------------------------------------------------------------
+  @
+  @	The tables, etc. go here.
+  @
+  @----------------------------------------------------------------------
+  
+	private boolean YyWrap() {
+		return true;
+	}
+	
+	private void YyMore() {
+		yyMoreFlag = 1;
+	}
+	
+	private void WriteToFile(File name, String str) {
+	}
+	
+	private void AddKeyWord() {
+		keyWord.put("auto", Token.CLASS);
+		keyWord.put("break", Token.BREAK);
+		keyWord.put("case", Token.CASE);
+		keyWord.put("char", Token.TYPE);
+		keyWord.put("continue", Token.CONTINUE);
+		keyWord.put("default", Token.DEFAULT);
+		keyWord.put("do", Token.DO);
+		keyWord.put("double", Token.TYPE);
+		keyWord.put("else", Token.ELSE);
+		keyWord.put("enum", Token.ENUM);
+		keyWord.put("extern", Token.CLASS);
+		keyWord.put("float", Token.TYPE);
+		keyWord.put("for", Token.FOR);
+		keyWord.put("goto", Token.GOTO);
+		keyWord.put("if", Token.IF);
+		keyWord.put("int", Token.TYPE);
+		keyWord.put("long", Token.TYPE);
+		keyWord.put("register", Token.CLASS);
+		keyWord.put("return", Token.RETURN);
+		keyWord.put("short", Token.TYPE);
+		keyWord.put("sizeof", Token.SIZEOF);
+		keyWord.put("static", Token.CLASS);
+		keyWord.put("struct", Token.STRUCT);
+		keyWord.put("switch", Token.SWITCH);
+		keyWord.put("typedef", Token.CLASS);
+		keyWord.put("union", Token.STRUCT);
+		keyWord.put("unsigned", Token.TYPE);
+		keyWord.put("void", Token.TYPE);
+		keyWord.put("while", Token.WHILE);
+	}
+	
+	private int IdOrKeyword(String keyText) {
+		int retVal = legalChar ? Token.ID : Token.OTHER;
+		if (null != keyWord.get(keyText)) {
+			retVal = keyWord.get(keyText);
+		}
+		return retVal;
+	}
+  
+	public Lexyy(String sourceFileName) {
+		sourceInput = new SourceFileInput(sourceFileName);
+		yyDebug     = new YyDebug();
+		keyWord     = new HashMap<String, Integer>();
+		AddKeyWord();
+	}
+  
+/*----------------------------------------------------------------------*/
+	public int YyLex() {
+		int yyLastAccept;   /* Most recently seen accept state     	*/
+		int yyPrev = -1;	/* State before yyLastAccept           	*/
+		int yyNstate;		/* Next state, given lookahead.        	*/
+		int yyLook;			/* Lookahead character	         		*/
+		int	yyAnchor = 0;	/* Anchor point for most recently seen	*/
+							/* accepting state.						*/
+		int retVal = -1;
+		
+		if (-1 == yyState) {
+			sourceInput.Advance();
+			sourceInput.PushBack(1);
+		}
+		
+		yyState      = 0;	/* Top-of-loop initializations */
+		yyLastAccept = 0;
+		yyMoreFlag   = 0;
+		
+		sourceInput.UnTerm();
+		sourceInput.MarkStart();
+		
+		while (true) {
+		/* Check end of file. If there's an unprocessed accepting state,
+		 * yyLastAccept will be nonzero. In this case, ignore EOF for now so
+		 * that you can do the accepting action; otherwise, try to open another
+		 * file and return if you can't.
+		 */
+		 	legalChar  = true;
+			while (true) {
+				if ('\0' != (yyLook = sourceInput.Look(1))) {
+					yyNstate = YyNext(yyState, yyLook);
+					break;
+				}
+				else {
+					if (0 != yyLastAccept) { /* Still something to do */
+						yyNstate = -1;
+						break;
+					}
+					else if (YyWrap()) { /* Another file?  */
+						Globals.yyText = "";     /* No             */
+						Globals.yyLeng = 0;
+						return -1;
+					}
+					else {
+						sourceInput.Advance(); /* Load a new buffer */
+						sourceInput.PushBack(1);
+					}
+				}
+			}
+			if (-1 != yyNstate) { //这里用到了贪婪算法，最长匹配，遇到接受状态继续往下走，直到遇到失败状态终止
+				if (sourceInput.Advance() < 0) {
+					sourceInput.Flush(true);
+				}
+				if (0 != (yyAnchor = yyAccept[yyNstate])) { /* Saw an accept state */
+					yyPrev       = yyState;
+					yyLastAccept = yyNstate ;
+					sourceInput.MarkEnd(); /* Mark input at current character. */
+										   /* A subsequent ii_to_mark()        */
+										   /* returns us to this position.     */
+				}
+				yyState = yyNstate;
+			}
+			else {
+				if (0 == yyLastAccept)     /* Illegal input */
+					sourceInput.Advance(); /* Skip char that caused failure.   */
+				else {
+					retVal = -1;
+					sourceInput.ToMark();        /* Back up to previous accept state */
+					if (0 != (yyAnchor & 2))       /* If end anchor is active	   */
+						sourceInput.PushBack(1); /* Push back the CR or LF	   */
+					if (0 != (yyAnchor & 1))       /* If start anchor is active */
+						sourceInput.MarkStart(); /* skip the leading newline  */
+						
+					sourceInput.Term();          /* Null-terminate the string */
+					Globals.yyText   = sourceInput.CurText();
+					Globals.yyLeng   = sourceInput.CurLength();
+					Globals.yyLineno = sourceInput.CurLineno();
+					
+					switch (yyLastAccept) {
+
+
+  @		   +-----------------------------------------------------------+
+  @		   | The case statements associated with the accepting strings |
+  @		   | go here						       |
+  @		   +-----------------------------------------------------------+
+  @					
+					default:
+					break;
+					}
+				}
+				if (-1 != retVal)
+					return retVal;
+				sourceInput.UnTerm();
+				yyLastAccept = 0;
+				if (0 == yyMoreFlag) {
+					yyState = 0;
+					sourceInput.MarkStart();
+				}
+				else {
+					yyState   = yyPrev;
+					yyMoreFlag = 0;
+				}
+			}
+		}		
+	}
+	
+	
