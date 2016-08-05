@@ -1,0 +1,23 @@
+刚开始为弄懂原理，以简单实现为主,
+第一阶段：LEX即词法分析器生成器
+发现^和$在解析parser的LEX定义文件中有用，
+在一般的语言(例如c)LEX定义文件中没有用。
+为了以后解析parser，增加了^和$以及anchor的支持。
+分为两部分:
+1.词法分析器生成器的支持
+2.输入缓冲区的支持
+在词法分析器生成器方面修改了
+lex/Thomposon.java、lex/MinDfa.java、
+lex/Nfa.java、lex/Accept.java、lex/Dfa.java
+在输入缓冲区方面修改了
+lib/SourceFileInput.java
+目前已完成C语言的词法分析器生成器，生成了
+java模板
+注意：
+C源文件部分的预定义部分不由yylex来处理
+即#include #define等预定义宏
+一般由preprocessor来处理
+尚未完成的有（一般需要在parser里面去完成）
+1.IdOrKeywork方法没有完善，没有符号表
+2.WriteToFiles写到代码codeOut没有完善
+3.yyDebug yyEror没有完善
